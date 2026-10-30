@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickNotes Online Client</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f4f7f6; color: #333; }
+        h1, h2 { color: #2c3e50; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        textarea { height: 100px; resize: vertical; }
+        button { background-color: #3498db; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        button.delete-btn { background-color: #e74c3c; font-size: 13px; padding: 5px 10px; margin-top: 10px; }
+        #statusMessage { padding: 12px; border-radius: 4px; font-weight: bold; margin-bottom: 20px; display: none; }
+        .status-info { background-color: #e8f4fd; color: #1d6fa5; display: block !important; }
+        .status-success { background-color: #e6f4ea; color: #137333; display: block !important; }
+        .status-error { background-color: #fce8e6; color: #c5221f; display: block !important; }
+        .note-item { border-left: 4px solid #3498db; padding-left: 15px; margin-bottom: 20px; background: #fafafa; padding: 15px; border-radius: 0 4px 4px 0; }
+        .note-title { font-weight: bold; font-size: 18px; margin: 0 0 8px 0; color: #2c3e50; }
+        .note-body { margin: 0; color: #555; white-space: pre-wrap; }
+        .empty-state { text-align: center; color: #7f8c8d; font-style: italic; padding: 30px; }
+    </style>
+</head>
+<body>
+
+    <h1>📝 QuickNotes Pro Workspace</h1>
+    
+    <div id="statusMessage"></div>
+
+    <!-- Create Note Form -->
+    <div class="card">
+        <h2>Add a New Note</h2>
+        <form id="noteForm">
+            <div class="form-group">
+                <label for="noteTitle">Title (Required, max 100 chars)</label>
+                <input type="text" id="noteTitle" placeholder="Enter an inspiring title..." required maxLength="100">
+            </div>
+            <div class="form-group">
+                <label for="noteBody">Body (Optional)</label>
+                <textarea id="noteBody" placeholder="Write down your brilliant thoughts..."></textarea>
+            </div>
+            <button type="submit" id="submitBtn">Save Note to Cloud</button>
+        </form>
+    </div>
+
+    <!-- Controls and Dashboard View -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2>Your Synced Notes</h2>
+            <button id="loadNotesBtn">Load notes</button>
+        </div>
+        <div id="notesContainer">
+            <div class="empty-state">No notes synced yet. Click "Load notes" to fetch data.</div>
+        </div>
+    </div>
+
+    <script src="api.js"></script>
+</body>
+</html>
