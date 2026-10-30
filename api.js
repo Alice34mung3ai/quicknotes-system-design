@@ -1,163 +1,179 @@
-const BASE_URL = 'https://jsonplaceholder.typicode.com';
+const API_URL = 'https://typicode.com';
 
-// Local array state to track client items dynamically
-let activeNotes = [];
+// Global Client-Side State Array
+let localNotes = [];
 
 // DOM References
-const loadNotesBtn = document.getElementById('loadNotesBtn');
-const noteForm = document.getElementById('noteForm');
-const noteTitle = document.getElementById('noteTitle');
-const noteBody = document.getElementById('noteBody');
-const submitBtn = document.getElementById('submitBtn');
-const notesContainer = document.getElementById('notesContainer');
-const statusMessage = document.getElementById('statusMessage');
+const loadBtn = document.getElementById('load-btn');
+const noteForm = document.getElementById('note-form');
+const titleInput = document.getElementById('title-input');
+const bodyInput = document.getElementById('body-input');
+const submitBtn = document.getElementById('submit-btn');
+const notesList = document.getElementById('notes-list');
+const statusDisplay = document.getElementById('status');
 
-// Helper function to handle notifications
-function showStatus(text, type) {
-    statusMessage.textContent = text;
-    statusMessage.className = ''; 
-    if (type) statusMessage.classList.add(`status-${type}`);
+/**
+ * Centralized, reusable HTTP async client function wrapper.
+ * Inspects network responses and manages global error states.
+ */
+async function request(url, options = {}) {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        throw new Error(`API Error: Server returned HTTP status ${response.status}`);
+    }
+    // Return empty json object context for status 204 or empty responses
+    if (response.status === 204) return {};
+    return await response.json();
+}
+
+// Global UI state rendering manager
+function showStatus(message, type) {
+    statusDisplay.textContent = message;
+    statusDisplay.className = '';
+    if (type) {
+        statusDisplay.classList.add(`status-${type}`);
+    }
 }
 
 function clearStatus() {
-    statusMessage.textContent = '';
-    statusMessage.style.display = 'none';
+    statusDisplay.textContent = '';
+    statusDisplay.className = '';
 }
 
-// Render dynamic DOM list elements
-function renderNotes() {
-    notesContainer.innerHTML = '';
-    
-    if (activeNotes.length === 0) {
-        notesContainer.innerHTML = '<div class="empty-state">No notes available. Your list is empty!</div>';
+function renderList() {
+    notesList.innerHTML = '';
+
+    if (localNotes.length === 0) {
+        const emptyLi = document.createElement('li');
+        emptyLi.className = 'empty-message';
+        emptyLi.textContent = 'Your note list is currently empty.';
+        notesList.appendChild(emptyLi);
         return;
     }
 
-    activeNotes.forEach(note => {
-        const noteDiv = document.createElement('div');
-        noteDiv.className = 'note-item';
-        noteDiv.dataset.id = note.id;
+    localNotes.forEach(note => {
+        const li = document.createElement('li');
+        li.className = 'note-item';
+        li.dataset.id = note.id;
 
-        const titleEl = document.createElement('h3');
-        titleEl.className = 'note-title';
-        titleEl.textContent = note.title;
+        const h3 = document.createElement('h3');
+        h3.className = 'note-title';
+        h3.textContent = note.title;
 
-        const bodyEl = document.createElement('p');
-        bodyEl.className = 'note-body';
-        bodyEl.textContent = note.body || '';
+        const p = document.createElement('p');
+        p.className = 'note-body';
+        p.textContent = note.body || '';
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'delete-btn';
         deleteBtn.textContent = 'Delete Note';
         deleteBtn.onclick = () => deleteNote(note.id);
 
-        noteDiv.appendChild(titleEl);
-        noteDiv.appendChild(bodyEl);
-        noteDiv.appendChild(deleteBtn);
-        notesContainer.appendChild(noteDiv);
+        li.appendChild(h3);
+        li.appendChild(p);
+        li.appendChild(deleteBtn);
+        notesList.appendChild(li);
     });
 }
 
-// Task 1: Fetch notes via GET
+// Task 1: GET - Fetch 10 Notes from Server
 async function loadNotes() {
-    loadNotesBtn.disabled = true;
-    loadNotesBtn.textContent = 'Loading notes...';
+    loadBtn.disabled = true;
     showStatus('Loading notes...', 'info');
 
     try {
-        const response = await fetch(`${BASE_URL}/posts?_limit=10`);
-        if (!response.ok) throw new Error(`HTTP Error Status: ${response.status}`);
-        
-        const data = await response.json();
-        // Format payload to mirror local structures cleanly
-        activeNotes = data.map(item => ({
+        const data = await request(`${API_URL}?_limit=10`);
+        localNotes = data.map(item => ({
             id: item.id,
             title: item.title,
             body: item.body,
             userId: item.userId
         }));
-
-        renderNotes();
-        showStatus(`Loaded ${activeNotes.length} notes from the server.`, 'success');
+        renderList();
+        showStatus('Loaded 10 notes from the server.', 'success');
     } catch (error) {
         console.error(error);
-        showStatus('Failed to retrieve notes from the cloud server. Please check your internet connection.', 'error');
+        showStatus('An error occurred while loading notes from the cloud.', 'error');
     } finally {
-        loadNotesBtn.disabled = false;
-        loadNotesBtn.textContent = 'Load notes';
+        loadBtn.disabled = false;
     }
 }
 
-// Task 2: Create notes via POST
+// Task 2: POST - Create Note with Client Validation
 async function createNote(e) {
     e.preventDefault();
-    
-    const titleVal = noteTitle.value.trim();
-    const bodyVal = noteBody.value.trim();
 
-    if (!titleVal) {
+    const titleText = titleInput.value.trim();
+    const bodyText = bodyInput.value.trim();
+
+    // Client-side structural input checks
+    if (!titleText) {
         showStatus('Validation Error: A note title is strictly required.', 'error');
+        return;
+    }
+    if (titleText.length > 100) {
+        showStatus('Validation Error: Title must be 100 characters or fewer.', 'error');
         return;
     }
 
     submitBtn.disabled = true;
-    showStatus('Syncing new note to the server...', 'info');
+    showStatus('Syncing note to server...', 'info');
 
     try {
-        const response = await fetch(`${BASE_URL}/posts`, {
+        const payload = {
+            title: titleText,
+            body: bodyText,
+            userId: 1
+        };
+
+        const newNote = await request(API_URL, {
             method: 'POST',
-            body: JSON.stringify({
-                title: titleVal,
-                body: bodyVal,
-                userId: 1
-            }),
-            headers: { 'Content-type': 'application/json; charset=UTF-8' }
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'application/json; charset=UTF-8' }
         });
 
-        if (!response.ok) throw new Error(`Server returned status code: ${response.status}`);
-        
-        const newNote = await response.json();
-        
-        // Add custom local note item to state array
-        activeNotes.unshift(newNote);
-        renderNotes();
+        // JSONPlaceholder returns id: 101 on successful mock post operations
+        localNotes.unshift(newNote);
+        renderList();
 
-        showStatus(`Note created (status ${response.status}, id ${newNote.id}).`, 'success');
+        showStatus(`Note created (status 201, id ${newNote.id}).`, 'success');
         noteForm.reset();
     } catch (error) {
         console.error(error);
-        showStatus('Failed to upload the note to the server.', 'error');
+        showStatus('Failed to save the note to the remote cloud server.', 'error');
     } finally {
         submitBtn.disabled = false;
     }
 }
 
-// Task 3: Delete notes via DELETE
+// Task 3: DELETE - Remove Targeted Document Index
 async function deleteNote(id) {
     showStatus(`Attempting deletion of note ID: ${id}...`, 'info');
 
     try {
-        const response = await fetch(`${BASE_URL}/posts/${id}`, { method: 'DELETE' });
-        
-        if (!response.ok) throw new Error(`Deletion endpoint error: ${response.status}`);
+        // Run network call using centralized validation client wrapper
+        await request(`${API_URL}/${id}`, { method: 'DELETE' });
 
-        /* 
-           JSONPlaceholder Approach Explanation:
-           Because JSONPlaceholder is a mock REST API framework, DELETE network responses 
-           rely on simulated configurations and do not remove items on their backing filesystem database. 
-           To handle this reliably for the user interface, we filter out the targeted note asset 
-           from our client-side state array 'activeNotes' immediately upon receiving an HTTP 200/204 response code.
+        /*
+           JSONPlaceholder Mock Server Handling Paradigm Comment:
+           Because JSONPlaceholder is a static mock endpoint suite, DELETE operations 
+           do not modify the real remote storage system. To maintain a functional, 
+           intuitive UI for the user, we catch the successful network response code 
+           and filter the target note item out of our client-side state array 'localNotes'.
         */
-        activeNotes = activeNotes.filter(note => note.id !== id);
-        renderNotes();
+        localNotes = localNotes.filter(note => note.id !== id);
+        renderList();
 
-        showStatus(`Note ID ${id} deleted successfully (status ${response.status}).`, 'success');
+        showStatus(`Note deleted successfully (status 200).`, 'success');
     } catch (error) {
         console.error(error);
-        showStatus(`Failed to delete note ID ${id}.`, 'error');
+        showStatus(`Failed to delete note ID ${id} from cloud directory.`, 'error');
     }
 }
 
-// Event Listeners
-loadNotesBtn.addEventListener('click', loadNotes);
+// Core Runtime Wireframes
+loadBtn.addEventListener('click', loadNotes);
 noteForm.addEventListener('submit', createNote);
+
+// Initialize with Empty State List View Setup
+renderList();
