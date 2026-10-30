@@ -1,31 +1,31 @@
-# Production Storage Engine & Relational Schema Design
+# Relational Data Architecture Blueprint
 
-## Strategic Architecture Decision: SQL over NoSQL
-For the QuickNotes core system, we have selected an enterprise **Relational SQL Database Engine (PostgreSQL)** over a NoSQL platform. 
+## Architectural Framework Selection: Relational SQL
+For QuickNotes, we have selected an enterprise **Relational SQL Database (PostgreSQL)** over a Document NoSQL framework.
 
-### Decision Rationale:
-* **Strong ACiD Guarantees:** Notes data requires total consistency; a user editing a note on a phone must see those precise changes reflected immediately on their web browser. Relational engines prevent partial data writes and race conditions naturally.
-* **Complex Data Topology:** The social-sharing mechanics, collaborator user invitations, and organized tag structures involve interconnected structural logic. SQL handling handles these entity relations using optimized native JOIN lookups far better than nesting documents in NoSQL collection schemas.
+### Rationale:
+* **Strong ACID Safety:** User updates across mobile and web interfaces must reflect immediately. SQL databases guarantee strict data consistency, preventing dirty reads or partial writes.
+* **Fully Normalized Interconnected Structures:** QuickNotes requires users to share documents with collaborators and assign tag indices. A relational model handles these structures efficiently via optimized foreign key mappings, avoiding data duplication and keeping storage footprints minimal.
 
 ---
 
-## Logical Entity Relationship Blueprint
+## Logical System Entity Diagram
+
+This normalized layout splits out `tags` from the join structure to prevent data duplication and enable efficient system-wide tag searches.
 
 ```text
-[ Users ] 1 ─────── 0..N [ Notes ] 1 ─────── 0..N [ Note_Tags ]
-                             1
-                             │
-                             └─ 0..N [ Collaborators ]
+[ users ] 1 ─────── 0..N [ notes ] 1 ─────── 0..N [ note_tags ]
+                                                      0..N
+                                                        │
+                                                      1 └── [ tags ]
 ```
-* **Users** have a One-to-Many (`1:N`) relationship with **Notes**.
-* **Notes** have a One-to-Many (`1:N`) mapping with relation tables linking to **Collaborators** and **Note_Tags**.
 
 ---
 
-## Core DDL Relational Tables Structure
+## Production DDL Schema Blueprint
 
 ```sql
--- 1. Users Model Account Management Table
+-- 1. Identity Account Records
 CREATE TABLE users (
     id VARCHAR(50) PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. Notes Content Structural Table
+-- 2. Core Notes Text Content
 CREATE TABLE notes (
     id VARCHAR(50) PRIMARY KEY,
     user_id VARCHAR(50) NOT NULL,
@@ -45,58 +45,60 @@ CREATE TABLE notes (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- 3. Collaborators Authorization Security Matrix Table
-CREATE TABLE collaborators (
+-- 3. Normalized Tags Master Lookup Table
+CREATE TABLE tags (
     id VARCHAR(50) PRIMARY KEY,
-    note_id VARCHAR(50) NOT NULL,
-    user_id VARCHAR(50) NOT NULL,
-    access_level VARCHAR(20) NOT NULL CHECK (access_level IN ('READ', 'WRITE', 'ADMIN')),
-    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE (note_id, user_id)
+    name VARCHAR(50) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Note Tags Organization Index Table
+-- 4. Many-to-Many Notes-to-Tags Relation Table
 CREATE TABLE note_tags (
-    id VARCHAR(50) PRIMARY KEY,
     note_id VARCHAR(50) NOT NULL,
-    tag_name VARCHAR(30) NOT NULL,
+    tag_id VARCHAR(50) NOT NULL,
+    PRIMARY KEY (note_id, tag_id),
     FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
-    UNIQUE (note_id, tag_name)
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 ```
 
 ---
 
-## Production Execution Query Reference Examples
+## Core SQL Queries
 
-### Fetch Active Timelines (Read Query)
+### Chronological Notes Listing (JOIN)
 ```sql
-SELECT n.id, n.title, n.body, n.updated_at 
+SELECT n.id, n.title, n.body, n.updated_at, t.name AS tag_name
 FROM notes n
-WHERE n.user_id = 'user_4710bc82'
-ORDER BY n.updated_at DESC
-LIMIT 20;
+LEFT JOIN note_tags nt ON n.id = nt.note_id
+LEFT JOIN tags t ON nt.tag_id = t.id
+WHERE n.user_id = 'usr_3910ff21'
+ORDER BY n.updated_at DESC;
 ```
 
-### Map Sharing Access Controls (Collaborator Query)
+### Save Note Record
 ```sql
-SELECT n.id, n.title, c.access_level 
+INSERT INTO notes (id, user_id, title, body)
+VALUES ('nt_5520fa', 'usr_3910ff21', 'Refactoring API Client', 'Extracted fetch into a reusable request function.');
+```
+
+### Fetch Notes matching a Specific Tag
+```sql
+SELECT n.id, n.title, n.body
 FROM notes n
-JOIN collaborators c ON n.id = c.note_id
-WHERE c.user_id = 'user_9912aa44';
+JOIN note_tags nt ON n.id = nt.note_id
+JOIN tags t ON nt.tag_id = t.id
+WHERE t.name = 'scalability';
 ```
 
 ---
 
-## Performance-Tuning Database Indexes
-To maintain ultra-low query latency under 1 million active users, we introduce the following targeted B-Tree indexes:
+## Database Performance Indexes
 
 ```sql
--- Speeds up note list generation and chronological sorting for the user dashboard
+-- Accelerates chronological listing and ordering of user note dashboards
 CREATE INDEX idx_notes_user_id_updated_at ON notes(user_id, updated_at DESC);
 
--- Speeds up security checks when external collaborators open shared notes
-CREATE INDEX idx_collaborators_user_id ON collaborators(user_id);
+-- Speeds up many-to-many lookup joins when users search or browse items by tag references
+CREATE INDEX idx_note_tags_tag_id ON note_tags(tag_id);
 ```
